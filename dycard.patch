@@ -1,0 +1,820 @@
+diff --git a/src/backend/Makefile b/src/backend/Makefile
+index 9706a95..58c3fc4 100644
+--- a/src/backend/Makefile
++++ b/src/backend/Makefile
+@@ -19,7 +19,7 @@ include $(top_builddir)/src/Makefile.global
+ 
+ SUBDIRS = access bootstrap catalog parser commands executor foreign lib libpq \
+ 	main nodes optimizer partitioning port postmaster \
+-	regex replication rewrite \
++	dycard regex replication rewrite \
+ 	statistics storage tcop tsearch utils $(top_builddir)/src/timezone \
+ 	jit
+ 
+diff --git a/src/backend/dycard/Makefile b/src/backend/dycard/Makefile
+index e69de29..e9c06bd 100644
+--- a/src/backend/dycard/Makefile
++++ b/src/backend/dycard/Makefile
+@@ -0,0 +1,19 @@
++#-------------------------------------------------------------------------
++#
++# Makefile--
++#    Makefile for dycard
++#
++# IDENTIFICATION
++#    src/backend/dycard/Makefile
++#
++#-------------------------------------------------------------------------
++
++subdir = src/backend/dycard
++top_builddir = ../../..
++include $(top_builddir)/src/Makefile.global
++
++OBJS = \
++	utils.o \
++	dcard.o
++
++include $(top_srcdir)/src/backend/common.mk
+diff --git a/src/backend/dycard/dcard.c b/src/backend/dycard/dcard.c
+index e69de29..837bb5e 100644
+--- a/src/backend/dycard/dcard.c
++++ b/src/backend/dycard/dcard.c
+@@ -0,0 +1,156 @@
++#include "dycard/dcard.h"
++#include "dycard/utils.h"
++#include "executor/executor.h"
++#include "utils/rel.h"
++#include "utils/lsyscache.h"
++#include "postgres.h"
++#include "nodes/nodes.h"
++#include "nodes/parsenodes.h"
++#include "catalog/pg_class.h"
++#include "parser/parsetree.h"
++#include "utils/guc.h"
++#include <stdlib.h>
++
++bool enable_dycard = false;
++bool static_mode = false;
++
++int server_port = 7654;
++char *server_host = "localhost";
++
++int g_server_conn = -1;
++bool g_conn_initialized = false;
++
++char *
++GetPlanNodeType(PlanState *planstate)
++{
++    switch (nodeTag(planstate->plan))
++    {
++        case T_SeqScan:
++            return planstate->plan->parallel_aware ? "Parallel Seq Scan" : "Seq Scan";
++        case T_IndexScan:
++            return planstate->plan->parallel_aware ? "Parallel Index Scan" : "Index Scan";
++        case T_IndexOnlyScan:
++            return planstate->plan->parallel_aware ? "Parallel Index Only Scan" : "Index Only Scan";
++        case T_BitmapHeapScan:
++            return planstate->plan->parallel_aware ? "Parallel Bitmap Heap Scan" : "Bitmap Heap Scan";
++        
++        case T_NestLoop:
++            return planstate->plan->parallel_aware ? "Parallel Nested Loop" : "Nested Loop";
++        case T_MergeJoin:
++            return planstate->plan->parallel_aware ? "Parallel Merge Join" : "Merge Join";
++        case T_HashJoin:
++            return planstate->plan->parallel_aware ? "Parallel Hash Join" : "Hash Join";
++        
++        case T_Agg:
++            return ((Agg *)planstate->plan)->aggstrategy == AGG_SORTED ? "GroupAggregate" :
++                   ((Agg *)planstate->plan)->aggstrategy == AGG_HASHED ? "HashAggregate" : "Aggregate";
++        
++        case T_Gather:
++            return "Gather";
++        case T_GatherMerge:
++            return "Gather Merge";
++        
++        case T_Sort:
++            return planstate->plan->parallel_aware ? "Parallel Sort" : "Sort";
++        case T_Hash:
++            return NULL;
++        
++        default:
++            return "Unknown";
++    }
++}
++
++void
++get_table_aliases(PlanState *planstate, StringInfo buf, bool *first)
++{
++    Plan *plan = planstate->plan;
++    
++    switch (nodeTag(plan))
++    {
++        case T_SeqScan:
++        case T_IndexScan:
++        case T_IndexOnlyScan:
++        case T_BitmapHeapScan:
++        {
++            Scan *scan = (Scan *)plan;
++            if (scan->scanrelid > 0) {
++                RangeTblEntry *rte = rt_fetch(scan->scanrelid, 
++                                            planstate->state->es_range_table);
++                if (rte->rtekind == RTE_RELATION) {
++                    if (!*first)
++                        appendStringInfoChar(buf, ',');
++                    if (rte->eref && rte->eref->aliasname)
++                        appendStringInfo(buf, "\"%s\"", rte->eref->aliasname);
++                    *first = false;
++                }
++            }
++            break;
++        }
++        default:
++            break;  
++    }
++    
++    if (planstate->lefttree)
++        get_table_aliases(planstate->lefttree, buf, first);
++    if (planstate->righttree)
++        get_table_aliases(planstate->righttree, buf, first);
++}
++
++void ExplainPlanToJSON(PlanState *planstate, StringInfo json) {
++    Plan *plan = planstate->plan;
++    
++    if (nodeTag(plan) == T_Hash && planstate->lefttree) {
++        ExplainPlanToJSON(planstate->lefttree, json);
++        return;
++    }
++    
++    appendStringInfoChar(json, '{');
++    
++    appendStringInfo(json, "\"node_type\": \"%s\"",
++                    GetPlanNodeType(planstate));
++    
++    StringInfoData tables;
++    initStringInfo(&tables);
++    bool first = true;
++    get_table_aliases(planstate, &tables, &first);
++    appendStringInfo(json, ", \"tables\": [%s]", tables.data);
++    pfree(tables.data);
++    
++    appendStringInfo(json, ", \"estimated_rows\": %.0f",
++                    plan->plan_rows);
++    
++    appendStringInfo(json, ", \"actual_rows\": %.0f",
++                    planstate->instrument ? planstate->instrument->ntuples : 0);
++    
++    appendStringInfo(json, ", \"loops\": %.0f",
++                    planstate->instrument ? planstate->instrument->nloops : 0);
++    
++    if (planstate->lefttree || planstate->righttree) {
++        appendStringInfoString(json, ", \"children\": [");
++        
++        if (planstate->lefttree) {
++            if (nodeTag(planstate->lefttree->plan) == T_Hash && planstate->lefttree->lefttree)
++                ExplainPlanToJSON(planstate->lefttree->lefttree, json);
++            else
++                ExplainPlanToJSON(planstate->lefttree, json);
++                
++            if (planstate->righttree)
++                appendStringInfoChar(json, ',');
++        }
++        
++        if (planstate->righttree) {
++            if (nodeTag(planstate->righttree->plan) == T_Hash && planstate->righttree->lefttree)
++                ExplainPlanToJSON(planstate->righttree->lefttree, json);
++            else
++                ExplainPlanToJSON(planstate->righttree, json);
++        }
++        
++        appendStringInfoChar(json, ']');
++    }
++    
++    appendStringInfoChar(json, '}');
++}
++
++
++
++
+diff --git a/src/backend/dycard/utils.c b/src/backend/dycard/utils.c
+index e69de29..94b5ede 100644
+--- a/src/backend/dycard/utils.c
++++ b/src/backend/dycard/utils.c
+@@ -0,0 +1,133 @@
++#include "postgres.h"
++#include "dycard/utils.h"
++#include <arpa/inet.h>
++#include <unistd.h>
++#include "storage/ipc.h"
++
++static bool cleanup_registered = false; 
++
++int connect_to_server(const char* host, int port) {
++  int ret, conn_fd;
++  struct sockaddr_in server_addr = { 0 };
++  struct timeval timeout;
++  
++  // set 5 seconds timeout
++  timeout.tv_sec = 5;
++  timeout.tv_usec = 0;
++
++  server_addr.sin_family = AF_INET;
++  server_addr.sin_port = htons(port);
++  inet_pton(AF_INET, host, &server_addr.sin_addr);
++  conn_fd = socket(AF_INET, SOCK_STREAM, 0);
++  if (conn_fd < 0) {
++    return -1;
++  }
++  
++  // set connection timeout
++  if (setsockopt(conn_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
++    close(conn_fd);
++    return -1;
++  }
++  if (setsockopt(conn_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
++    close(conn_fd);
++    return -1;
++  }
++
++  ret = connect(conn_fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
++  if (ret == -1) {
++    close(conn_fd);
++    return -1;
++  }
++
++  return conn_fd;
++}
++
++
++void 
++write_to_socket(int conn_fd, const char* str) 
++{
++    size_t str_length;
++    ssize_t written, written_total;
++    str_length = strlen(str);
++    written_total = 0;
++    
++    while (written_total < str_length) {
++        written = write(conn_fd,
++                        str + written_total,
++                        str_length - written_total);
++        if (written <= 0) {
++            ereport(WARNING,
++                    (errcode_for_socket_access(),
++                     errmsg("failed to write to socket: %m, str: %s, port: %d", str, server_port)));
++            return;
++        }
++        written_total += written;
++    }
++}
++
++char* 
++read_from_socket(int conn_fd) 
++{
++    char* response_buf = palloc0(1024);
++    
++    struct timeval tv;
++    tv.tv_sec = 5;  
++    tv.tv_usec = 0;
++    setsockopt(conn_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
++    
++    ssize_t bytes_read = read(conn_fd, response_buf, 1023);
++    if (bytes_read <= 0) {
++        pfree(response_buf);
++        return NULL;
++    }
++    
++    response_buf[bytes_read] = '\0';
++    
++    if (bytes_read > 0 && response_buf[bytes_read - 1] == '\n') {
++        response_buf[bytes_read - 1] = '\0';
++    }
++
++    return response_buf;
++}
++
++int initialize_server_connection() {
++    if (g_conn_initialized && g_server_conn >= 0) {
++        return g_server_conn;
++    }
++    
++    g_server_conn = connect_to_server(server_host, server_port);
++    if (g_server_conn >= 0) {
++        g_conn_initialized = true;
++        if (!cleanup_registered) {
++            cleanup_registered = true;  
++            on_proc_exit(cleanup_dycard_connection, 0);
++        }
++    }
++    return g_server_conn;
++}
++
++void
++cleanup_dycard_connection_active(void)
++{
++    if (g_conn_initialized && g_server_conn >= 0) {
++        ereport(DEBUG1,  
++                (errmsg("actively cleaning up dycard connection: fd=%d", 
++                        g_server_conn)));
++        close(g_server_conn);
++        g_conn_initialized = false;
++        g_server_conn = -1;
++    }
++}
++
++void
++cleanup_dycard_connection(int code, Datum arg)
++{
++    if (g_conn_initialized && g_server_conn >= 0) {
++        ereport(LOG,
++                (errmsg("cleaning up dycard connection on exit: fd=%d, exit_code=%d", 
++                        g_server_conn, code)));
++        close(g_server_conn);
++        g_conn_initialized = false;
++        g_server_conn = -1;
++    }
++}
+\ No newline at end of file
+diff --git a/src/backend/executor/execMain.c b/src/backend/executor/execMain.c
+index 4fdffad..297bd89 100644
+--- a/src/backend/executor/execMain.c
++++ b/src/backend/executor/execMain.c
+@@ -64,7 +64,8 @@
+ #include "utils/rls.h"
+ #include "utils/ruleutils.h"
+ #include "utils/snapmgr.h"
+-
++#include "dycard/dcard.h"
++#include "dycard/utils.h"
+ 
+ /* Hooks for plugins to get control in ExecutorStart/Run/Finish/End */
+ ExecutorStart_hook_type ExecutorStart_hook = NULL;
+@@ -144,8 +145,20 @@ ExecutorStart(QueryDesc *queryDesc, int eflags)
+ {
+ 	if (ExecutorStart_hook)
+ 		(*ExecutorStart_hook) (queryDesc, eflags);
+-	else
+-		standard_ExecutorStart(queryDesc, eflags);
++	else {
++		if (enable_dycard && !static_mode) {
++			dycard_ExecutorStart(queryDesc, eflags);
++		} else {
++			standard_ExecutorStart(queryDesc, eflags);
++		}
++		// standard_ExecutorStart(queryDesc, eflags);
++	}
++}
++
++void
++dycard_ExecutorStart(QueryDesc *queryDesc, int eflags)
++{
++	standard_ExecutorStart(queryDesc, eflags);
+ }
+ 
+ void
+@@ -463,8 +476,46 @@ ExecutorEnd(QueryDesc *queryDesc)
+ {
+ 	if (ExecutorEnd_hook)
+ 		(*ExecutorEnd_hook) (queryDesc);
+-	else
+-		standard_ExecutorEnd(queryDesc);
++	else {
++		if (enable_dycard && !static_mode) {
++			dycard_ExecutorEnd(queryDesc);
++		} else {
++			standard_ExecutorEnd(queryDesc);
++		}
++	}
++}
++
++void 
++dycard_ExecutorEnd(QueryDesc *queryDesc) {
++	if (enable_dycard && !static_mode) {
++		StringInfoData json_plan;
++		if (!queryDesc->estate->es_finished)
++            ExecutorFinish(queryDesc);
++		initStringInfo(&json_plan);
++		appendStringInfoString(&json_plan, "plan:");
++
++		ExplainPlanToJSON(queryDesc->planstate, &json_plan);
++		appendStringInfoChar(&json_plan, '\n');
++
++		int conn = initialize_server_connection();
++		if (conn >= 0)
++		{
++			// ereport(NOTICE,
++			// 		(errmsg("Sending plan to dycard server: %s", json_plan.data)));
++
++			write_to_socket(conn, json_plan.data);
++
++			// char* response = read_from_socket(conn);
++			// if (response)
++			// {
++			// 	// ereport(NOTICE,
++			// 	// 		(errmsg("Received response from dycard server: %s", response)));
++			// 	pfree(response);
++			// }
++		}
++		pfree(json_plan.data);
++	}
++	standard_ExecutorEnd(queryDesc);
+ }
+ 
+ void
+diff --git a/src/backend/executor/execUtils.c b/src/backend/executor/execUtils.c
+index d0e65b8..af35948 100644
+--- a/src/backend/executor/execUtils.c
++++ b/src/backend/executor/execUtils.c
+@@ -62,6 +62,7 @@
+ #include "utils/memutils.h"
+ #include "utils/rel.h"
+ #include "utils/typcache.h"
++#include "dycard/utils.h"
+ 
+ 
+ static bool tlist_matches_tupdesc(PlanState *ps, List *tlist, Index varno, TupleDesc tupdesc);
+@@ -146,7 +147,7 @@ CreateExecutorState(void)
+ 	estate->es_processed = 0;
+ 
+ 	estate->es_top_eflags = 0;
+-	estate->es_instrument = 0;
++	estate->es_instrument = 0;	
+ 	estate->es_finished = false;
+ 
+ 	estate->es_exprcontexts = NIL;
+diff --git a/src/backend/optimizer/path/costsize.c b/src/backend/optimizer/path/costsize.c
+index ef7e828..24e44e9 100644
+--- a/src/backend/optimizer/path/costsize.c
++++ b/src/backend/optimizer/path/costsize.c
+@@ -92,10 +92,14 @@
+ #include "optimizer/planmain.h"
+ #include "optimizer/restrictinfo.h"
+ #include "parser/parsetree.h"
++#include "utils/elog.h"
+ #include "utils/lsyscache.h"
+ #include "utils/selfuncs.h"
+ #include "utils/spccache.h"
+ #include "utils/tuplesort.h"
++#include "dycard/dcard.h"
++#include "dycard/utils.h"
++#include "utils/ruleutils.h"
+ 
+ 
+ #define LOG2(x)  (log(x) / 0.693147180559945)
+@@ -4642,23 +4646,48 @@ approx_tuple_count(PlannerInfo *root, JoinPath *path, List *quals)
+ void
+ set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel)
+ {
+-	double		nrows;
+-
+-	/* Should only be applied to base relations */
+-	Assert(rel->relid > 0);
+-
+-	nrows = rel->tuples *
+-		clauselist_selectivity(root,
+-							   rel->baserestrictinfo,
+-							   0,
+-							   JOIN_INNER,
+-							   NULL);
+-
+-	rel->rows = clamp_row_est(nrows);
+-
+-	cost_qual_eval(&rel->baserestrictcost, rel->baserestrictinfo, root);
+-
+-	set_rel_width(root, rel);
++    double nrows;
++    Assert(rel->relid > 0);
++    nrows = rel->tuples * clauselist_selectivity(root, rel->baserestrictinfo, rel->relid, JOIN_INNER, NULL);
++
++    // if (enable_dycard && rel->reloptkind == RELOPT_BASEREL)
++    // {
++    //     RangeTblEntry *rte = planner_rt_fetch(rel->relid, root);
++    //     if (rte && rte->rtekind == RTE_RELATION)
++    //     {
++    //         int conn = initialize_server_connection();
++    //         if (conn < 0)
++    //         {
++    //             ereport(WARNING,
++    //                     (errcode(ERRCODE_CONNECTION_FAILURE),
++    //                      errmsg("failed to connect to dycard server")));
++    //         }
++    //         else
++    //         {
++    //             char msg_buf[1024];
++    //             snprintf(msg_buf, sizeof(msg_buf), "subplan: table %s | rows: %.0f\n",
++    //                      rte->eref->aliasname, nrows);
++
++    //             // ereport(NOTICE, (errmsg("sending base message to dycard server: %s", msg_buf)));
++    //             write_to_socket(conn, msg_buf);
++
++    //             char *response_buf = read_from_socket(conn);
++    //             if (response_buf)
++    //             {
++    //                 double original_nrows = nrows;
++    //                 nrows = atof(response_buf);
++    //                 // ereport(NOTICE,
++    //                 //         (errmsg("cardinality estimation corrected from %.0f to %.0f", 
++    //                 //               original_nrows, nrows)));
++    //                 pfree(response_buf);
++    //             }
++    //         }
++    //     }
++    // }
++
++    rel->rows = clamp_row_est(nrows);
++    cost_qual_eval(&rel->baserestrictcost, rel->baserestrictinfo, root);
++    set_rel_width(root, rel);
+ }
+ 
+ /*
+@@ -4720,19 +4749,105 @@ get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
+  */
+ void
+ set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
+-						   RelOptInfo *outer_rel,
+-						   RelOptInfo *inner_rel,
+-						   SpecialJoinInfo *sjinfo,
+-						   List *restrictlist)
++                           RelOptInfo *outer_rel,
++                           RelOptInfo *inner_rel,
++                           SpecialJoinInfo *sjinfo,
++                           List *restrictlist)
+ {
+-	rel->rows = calc_joinrel_size_estimate(root,
+-										   rel,
+-										   outer_rel,
+-										   inner_rel,
+-										   outer_rel->rows,
+-										   inner_rel->rows,
+-										   sjinfo,
+-										   restrictlist);
++    double nrows;
++    nrows = calc_joinrel_size_estimate(root,
++                                       rel,
++                                       outer_rel,
++                                       inner_rel,
++                                       outer_rel->rows,
++                                       inner_rel->rows,
++                                       sjinfo,
++                                       restrictlist);
++
++    if (enable_dycard) {
++		// ereport(NOTICE, (errmsg("join outer rows: %.0f, inner rows: %.0f, join rows: %.0f", outer_rel->rows, inner_rel->rows, nrows)));
++        int conn = initialize_server_connection();
++        if (conn < 0) {
++            ereport(WARNING,
++                    (errcode(ERRCODE_CONNECTION_FAILURE),
++                     errmsg("failed to connect to dycard server, falling back to default estimation")));
++
++        } else {
++            char msg_buf[1024];
++            StringInfoData join_tables;
++            initStringInfo(&join_tables);
++            Bitmapset *relids_copy = bms_copy(rel->relids);
++            int x;
++            bool first = true;
++            int written_total;
++            char* response_buf;
++            
++            while ((x = bms_first_member(relids_copy)) >= 0)
++            {
++                RangeTblEntry *rte = root->simple_rte_array[x];
++                if (!first)
++                    appendStringInfoString(&join_tables, " and ");
++                appendStringInfoString(&join_tables, rte->eref->aliasname);
++                first = false;
++            }
++            bms_free(relids_copy);
++            if (restrictlist != NIL)
++            {
++                ListCell   *l;
++                
++                foreach(l, restrictlist)
++                {
++                    RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
++                    Bitmapset *clause_relids_copy = bms_copy(rinfo->clause_relids);
++                    
++                    if (bms_num_members(clause_relids_copy) == 1)
++                    {
++
++                        appendStringInfoString(&join_tables, " > ");
++                        
++                        int relid = bms_first_member(clause_relids_copy);
++                        RangeTblEntry *rte = root->simple_rte_array[relid];
++                        char *filter_str = nodeToString((Node *) rinfo->clause);
++                        
++                        appendStringInfo(&join_tables, "%s.%s",
++                                rte->eref->aliasname,
++                                filter_str);
++                        
++                        pfree(filter_str);
++                    }
++                    bms_free(clause_relids_copy);
++                }
++            }
++            
++            written_total = snprintf(msg_buf, sizeof(msg_buf), 
++                    "subplan: join %s | rows: %.0f\n",
++                    join_tables.data,
++                    nrows);
++
++            if (written_total > sizeof(msg_buf)) {
++                ereport(WARNING,
++            		(errmsg("message truncated due to buffer overflow")));
++            }
++            // ereport(NOTICE,
++            //         (errmsg("sending join message to dycard server: %s", msg_buf)));
++            write_to_socket(conn, msg_buf);
++
++            response_buf = read_from_socket(conn);
++            if (response_buf != NULL) {
++                double original_nrows = nrows;
++				nrows = atof(response_buf);
++				ereport(NOTICE,
++                        (errmsg("cardinality estimation for join [%s] corrected from %.0f to %.0f", 
++                                join_tables.data, original_nrows, nrows)));
++				pfree(response_buf);
++            } else {
++                ereport(WARNING,
++                        (errmsg("failed to receive response from dycard server")));
++            }
++			pfree(join_tables.data);
++        }
++    } 
++    rel->rows = nrows;
+ }
+ 
+ /*
+diff --git a/src/backend/optimizer/plan/createplan.c b/src/backend/optimizer/plan/createplan.c
+index b3ab169..24c3754 100644
+--- a/src/backend/optimizer/plan/createplan.c
++++ b/src/backend/optimizer/plan/createplan.c
+@@ -41,7 +41,8 @@
+ #include "parser/parsetree.h"
+ #include "partitioning/partprune.h"
+ #include "utils/lsyscache.h"
+-
++#include "dycard/dcard.h"
++#include "dycard/utils.h"
+ 
+ /*
+  * Flag bits that can appear in the flags argument of create_plan_recurse().
+@@ -360,7 +361,7 @@ create_plan(PlannerInfo *root, Path *best_path)
+ 	 * re-used later
+ 	 */
+ 	root->plan_params = NIL;
+-
++	
+ 	return plan;
+ }
+ 
+diff --git a/src/backend/tcop/postgres.c b/src/backend/tcop/postgres.c
+index c9424f1..31deea4 100644
+--- a/src/backend/tcop/postgres.c
++++ b/src/backend/tcop/postgres.c
+@@ -80,7 +80,8 @@
+ #include "utils/snapmgr.h"
+ #include "utils/timeout.h"
+ #include "utils/timestamp.h"
+-
++#include "dycard/dcard.h"
++#include "dycard/utils.h"
+ /* ----------------
+  *		global variables
+  * ----------------
+@@ -996,6 +997,21 @@ exec_simple_query(const char *query_string)
+ 	 */
+ 	debug_query_string = query_string;
+ 
++	if (enable_dycard)
++	{
++		char msg_buf[4000];
++		int conn = initialize_server_connection();
++        snprintf(msg_buf, sizeof(msg_buf), "query: %s\n", query_string);
++        
++        // ereport(NOTICE, (errmsg("sending query to dycard server: %s", msg_buf)));
++        write_to_socket(conn, msg_buf);
++		char* response = read_from_socket(conn);
++		if (response)
++		{
++			pfree(response);
++		}
++	}
++
+ 	pgstat_report_activity(STATE_RUNNING, query_string);
+ 
+ 	TRACE_POSTGRESQL_QUERY_START(query_string);
+diff --git a/src/backend/utils/misc/guc.c b/src/backend/utils/misc/guc.c
+index 1683629..2fda537 100644
+--- a/src/backend/utils/misc/guc.c
++++ b/src/backend/utils/misc/guc.c
+@@ -98,6 +98,7 @@
+ #include "utils/tzparser.h"
+ #include "utils/varlena.h"
+ #include "utils/xml.h"
++#include "dycard/dcard.h"
+ 
+ #ifndef PG_KRB_SRVTAB
+ #define PG_KRB_SRVTAB ""
+@@ -163,6 +164,8 @@ static void assign_log_destination(const char *newval, void *extra);
+ static bool check_wal_consistency_checking(char **newval, void **extra,
+ 										   GucSource source);
+ static void assign_wal_consistency_checking(const char *newval, void *extra);
++static void assign_enable_dycard(bool newval, void *extra);
++static void assign_static_mode(bool newval, void *extra);
+ 
+ #ifdef HAVE_SYSLOG
+ static int	syslog_facility = LOG_LOCAL0;
+@@ -2040,6 +2043,27 @@ static struct config_bool ConfigureNamesBool[] =
+ 		NULL, NULL, NULL
+ 	},
+ 
++	{
++		{"enable_dycard", PGC_USERSET, DEVELOPER_OPTIONS,
++			gettext_noop("Enable dycard."),
++			NULL,
++			GUC_NOT_IN_SAMPLE
++		},
++		&enable_dycard,
++		false,
++		NULL, assign_enable_dycard, NULL
++	},
++
++	{
++		{"static_mode", PGC_USERSET, DEVELOPER_OPTIONS,
++			gettext_noop("Enable static mode."),
++			NULL,
++			GUC_NOT_IN_SAMPLE
++		},
++		&static_mode,
++		false,
++		NULL, assign_static_mode, NULL
++	},
+ 	/* End-of-list marker */
+ 	{
+ 		{NULL, 0, 0, NULL, NULL}, NULL, false, NULL, NULL, NULL
+@@ -5367,6 +5391,21 @@ InitializeGUCOptions(void)
+ 	 * environment variables.  Process those settings.
+ 	 */
+ 	InitializeGUCOptionsFromEnvironment();
++
++	DefineCustomIntVariable(
++        "dycard.port",
++        "Sets the port for dycard server connection",
++        NULL,
++        &server_port,
++        7654,
++        1,
++        65535,
++        PGC_USERSET,
++        0,
++        NULL,
++        NULL,
++        NULL
++    );
+ }
+ 
+ /*
+@@ -12037,4 +12076,29 @@ check_default_with_oids(bool *newval, void **extra, GucSource source)
+ 	return true;
+ }
+ 
++static void
++assign_enable_dycard(bool newval, void *extra)
++{
++	// avoid parallel worker for the mess actual rows in postgresql in multi-worker mode
++    if (newval) {
++		SetConfigOption("max_parallel_workers_per_gather", "0",
++                       PGC_USERSET, PGC_S_SESSION);
++		SetConfigOption("max_parallel_workers", "0",
++                       PGC_USERSET, PGC_S_SESSION);
++	}
++        
++}
++
++static void
++assign_static_mode(bool newval, void *extra)
++{
++	if (newval) {
++		SetConfigOption("max_parallel_workers_per_gather", "2",
++                       PGC_USERSET, PGC_S_SESSION);
++		SetConfigOption("max_parallel_workers", "8",
++                       PGC_USERSET, PGC_S_SESSION);
++	}
++		
++}
++
+ #include "guc-file.c"
+diff --git a/src/include/executor/executor.h b/src/include/executor/executor.h
+index 238b774..59d8bcb 100644
+--- a/src/include/executor/executor.h
++++ b/src/include/executor/executor.h
+@@ -185,6 +185,8 @@ extern void ExecutorFinish(QueryDesc *queryDesc);
+ extern void standard_ExecutorFinish(QueryDesc *queryDesc);
+ extern void ExecutorEnd(QueryDesc *queryDesc);
+ extern void standard_ExecutorEnd(QueryDesc *queryDesc);
++extern void dycard_ExecutorEnd(QueryDesc *queryDesc);
++extern void dycard_ExecutorStart(QueryDesc *queryDesc, int eflags);
+ extern void ExecutorRewind(QueryDesc *queryDesc);
+ extern bool ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation);
+ extern void CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation);

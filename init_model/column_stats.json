@@ -1,0 +1,296 @@
+{
+  "users.id": {
+    "min": "-1",
+    "max": "55747",
+    "avg": "28037.40",
+    "count": 40325,
+    "type": "numeric"
+  },
+  "users.reputation": {
+    "min": "1",
+    "max": "87393",
+    "avg": "84.08",
+    "count": 40325,
+    "type": "numeric"
+  },
+  "users.creationdate": {
+    "min": "1279493726",
+    "max": "1410627704",
+    "count": 40325,
+    "type": "bigint"
+  },
+  "users.views": {
+    "min": "0",
+    "max": "20932",
+    "avg": "8.91",
+    "count": 40325,
+    "type": "numeric"
+  },
+  "users.upvotes": {
+    "min": "0",
+    "max": "11442",
+    "avg": "6.59",
+    "count": 40325,
+    "type": "numeric"
+  },
+  "users.downvotes": {
+    "min": "0",
+    "max": "1920",
+    "avg": "0.26",
+    "count": 40325,
+    "type": "numeric"
+  },
+  "posts.id": {
+    "min": "1",
+    "max": "115378",
+    "avg": "56147.70",
+    "count": 91976,
+    "type": "numeric"
+  },
+  "posts.posttypeid": {
+    "min": "1",
+    "max": "7",
+    "avg": "1.57",
+    "count": 91976,
+    "type": "numeric"
+  },
+  "posts.creationdate": {
+    "min": "1233555672",
+    "max": "1410631763",
+    "count": 91976,
+    "type": "bigint"
+  },
+  "posts.score": {
+    "min": "-19",
+    "max": "192",
+    "avg": "2.79",
+    "count": 91976,
+    "type": "numeric"
+  },
+  "posts.viewcount": {
+    "min": "0",
+    "max": "175495",
+    "avg": "264.01",
+    "count": 91976,
+    "type": "numeric"
+  },
+  "posts.owneruserid": {
+    "min": "-1",
+    "max": "55746",
+    "avg": "16296.34",
+    "count": 91976,
+    "type": "numeric"
+  },
+  "posts.answercount": {
+    "min": "0",
+    "max": "136",
+    "avg": "0.52",
+    "count": 91976,
+    "type": "numeric"
+  },
+  "posts.commentcount": {
+    "min": "0",
+    "max": "45",
+    "avg": "1.90",
+    "count": 91976,
+    "type": "numeric"
+  },
+  "posts.favoritecount": {
+    "min": "0",
+    "max": "233",
+    "avg": "0.37",
+    "count": 91976,
+    "type": "numeric"
+  },
+  "posts.lasteditoruserid": {
+    "min": "-1",
+    "max": "55733",
+    "avg": "5783.01",
+    "count": 91976,
+    "type": "numeric"
+  },
+  "postlinks.id": {
+    "min": "108",
+    "max": "3356789",
+    "avg": "2326833.61",
+    "count": 11102,
+    "type": "numeric"
+  },
+  "postlinks.creationdate": {
+    "min": "1279694853",
+    "max": "1410612871",
+    "count": 11102,
+    "type": "bigint"
+  },
+  "postlinks.postid": {
+    "min": "4",
+    "max": "115360",
+    "avg": "60227.77",
+    "count": 11102,
+    "type": "numeric"
+  },
+  "postlinks.relatedpostid": {
+    "min": "1",
+    "max": "115163",
+    "avg": "32982.61",
+    "count": 11102,
+    "type": "numeric"
+  },
+  "postlinks.linktypeid": {
+    "min": "1",
+    "max": "3",
+    "avg": "1.17",
+    "count": 11102,
+    "type": "numeric"
+  },
+  "posthistory.id": {
+    "min": "1",
+    "max": "386848",
+    "avg": "188489.26",
+    "count": 303187,
+    "type": "numeric"
+  },
+  "posthistory.posthistorytypeid": {
+    "min": "1",
+    "max": "38",
+    "avg": "4.91",
+    "count": 303187,
+    "type": "numeric"
+  },
+  "posthistory.postid": {
+    "min": "1",
+    "max": "115378",
+    "avg": "56538.35",
+    "count": 303187,
+    "type": "numeric"
+  },
+  "posthistory.creationdate": {
+    "min": "1233555672",
+    "max": "1410634453",
+    "count": 303187,
+    "type": "bigint"
+  },
+  "posthistory.userid": {
+    "min": "-1",
+    "max": "55746",
+    "avg": "14907.05",
+    "count": 303187,
+    "type": "numeric"
+  },
+  "comments.id": {
+    "min": "1",
+    "max": "221292",
+    "avg": "107695.61",
+    "count": 174305,
+    "type": "numeric"
+  },
+  "comments.postid": {
+    "min": "1",
+    "max": "115376",
+    "avg": "54243.58",
+    "count": 174305,
+    "type": "numeric"
+  },
+  "comments.score": {
+    "min": "0",
+    "max": "90",
+    "avg": "0.39",
+    "count": 174305,
+    "type": "numeric"
+  },
+  "comments.creationdate": {
+    "min": "1233557119",
+    "max": "1410631467",
+    "count": 174305,
+    "type": "bigint"
+  },
+  "comments.userid": {
+    "min": "0",
+    "max": "55746",
+    "avg": "12240.67",
+    "count": 174305,
+    "type": "numeric"
+  },
+  "votes.id": {
+    "min": "1",
+    "max": "386258",
+    "avg": "191496.65",
+    "count": 328064,
+    "type": "numeric"
+  },
+  "votes.postid": {
+    "min": "1",
+    "max": "115376",
+    "avg": "40805.12",
+    "count": 328064,
+    "type": "numeric"
+  },
+  "votes.votetypeid": {
+    "min": "1",
+    "max": "16",
+    "avg": "2.72",
+    "count": 328064,
+    "type": "numeric"
+  },
+  "votes.creationdate": {
+    "min": "1233504000",
+    "max": "1410624000",
+    "count": 328064,
+    "type": "bigint"
+  },
+  "votes.userid": {
+    "min": "-1",
+    "max": "55706",
+    "avg": "1520.46",
+    "count": 328064,
+    "type": "numeric"
+  },
+  "votes.bountyamount": {
+    "min": "0",
+    "max": "500",
+    "avg": "0.36",
+    "count": 328064,
+    "type": "numeric"
+  },
+  "badges.id": {
+    "min": "1",
+    "max": "92240",
+    "avg": "45430.05",
+    "count": 79851,
+    "type": "numeric"
+  },
+  "badges.userid": {
+    "min": "2",
+    "max": "55746",
+    "avg": "18638.28",
+    "count": 79851,
+    "type": "numeric"
+  },
+  "badges.date": {
+    "min": "1279539547",
+    "max": "1410633088",
+    "count": 79851,
+    "type": "bigint"
+  },
+  "tags.id": {
+    "min": "1",
+    "max": "1869",
+    "avg": "952.37",
+    "count": 1032,
+    "type": "numeric"
+  },
+  "tags.count": {
+    "min": "1",
+    "max": "7244",
+    "avg": "114.01",
+    "count": 1032,
+    "type": "numeric"
+  },
+  "tags.excerptpostid": {
+    "min": "2331",
+    "max": "114058",
+    "avg": "54505.44",
+    "count": 596,
+    "type": "numeric"
+  }
+}
