@@ -38,14 +38,14 @@ class QueryExecutor:
         
         if self.base_mode:
             if not self.parallel_mode:
-                self.results_file = f"./results/{config.dbname}_train_baseline.txt"
+                self.results_file = f"./logs/{config.dbname}_train_baseline.txt"
             else:
-                self.results_file = f"./results/{config.dbname}_normal_baseline.txt"
+                self.results_file = f"./logs/{config.dbname}_normal_baseline.txt"
         else:
             if not self.parallel_mode:
-                self.results_file = f'./results/{config.dbname}_loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_train.txt'
+                self.results_file = f'./logs/{config.dbname}_loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_train.txt'
             else:
-                self.results_file = f'./results/{config.dbname}_loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_test.txt'
+                self.results_file = f'./logs/{config.dbname}_loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_test.txt'
         self.logger.info(f"Results will be written to: {self.results_file}")
     
     def connect_db(self):

@@ -12,8 +12,9 @@ index 9706a95..58c3fc4 100644
  	jit
  
 diff --git a/src/backend/dycard/Makefile b/src/backend/dycard/Makefile
-index e69de29..e9c06bd 100644
---- a/src/backend/dycard/Makefile
+new file mode 100644
+index 0000000..e9c06bd
+--- /dev/null
 +++ b/src/backend/dycard/Makefile
 @@ -0,0 +1,19 @@
 +#-------------------------------------------------------------------------
@@ -36,8 +37,9 @@ index e69de29..e9c06bd 100644
 +
 +include $(top_srcdir)/src/backend/common.mk
 diff --git a/src/backend/dycard/dcard.c b/src/backend/dycard/dcard.c
-index e69de29..837bb5e 100644
---- a/src/backend/dycard/dcard.c
+new file mode 100644
+index 0000000..837bb5e
+--- /dev/null
 +++ b/src/backend/dycard/dcard.c
 @@ -0,0 +1,156 @@
 +#include "dycard/dcard.h"
@@ -197,8 +199,9 @@ index e69de29..837bb5e 100644
 +
 +
 diff --git a/src/backend/dycard/utils.c b/src/backend/dycard/utils.c
-index e69de29..94b5ede 100644
---- a/src/backend/dycard/utils.c
+new file mode 100644
+index 0000000..94b5ede
+--- /dev/null
 +++ b/src/backend/dycard/utils.c
 @@ -0,0 +1,133 @@
 +#include "postgres.h"
@@ -805,6 +808,56 @@ index 1683629..2fda537 100644
 +}
 +
  #include "guc-file.c"
+diff --git a/src/include/dycard/dcard.h b/src/include/dycard/dcard.h
+new file mode 100644
+index 0000000..cffa9bb
+--- /dev/null
++++ b/src/include/dycard/dcard.h
+@@ -0,0 +1,21 @@
++#include "postgres.h"
++#include <stdbool.h>
++#include "executor/executor.h"
++#ifndef DCARD_H
++#define DCARD_H
++
++extern bool	enable_dycard;
++extern bool static_mode;
++
++extern int server_port;
++extern char *server_host;
++
++extern int g_server_conn;
++extern bool g_conn_initialized;
++
++extern void ExplainPlanToJSON(PlanState *planstate, StringInfo json);
++extern char *GetPlanNodeType(PlanState *planstate);
++extern void get_table_aliases(PlanState *planstate, StringInfo json, bool *first);
++
++
++#endif
+diff --git a/src/include/dycard/utils.h b/src/include/dycard/utils.h
+new file mode 100644
+index 0000000..3aab0fa
+--- /dev/null
++++ b/src/include/dycard/utils.h
+@@ -0,0 +1,17 @@
++#include "postgres.h"
++#include "dycard/dcard.h"
++
++extern int 
++connect_to_server(const char* host, int port);
++
++
++extern void 
++write_to_socket(int conn_fd, const char* str);
++
++extern char* 
++read_from_socket(int conn_fd);
++
++extern int initialize_server_connection(void);
++extern void cleanup_dycard_connection(int code, Datum arg);
++extern void cleanup_dycard_connection_active(void);
++
 diff --git a/src/include/executor/executor.h b/src/include/executor/executor.h
 index 238b774..59d8bcb 100644
 --- a/src/include/executor/executor.h

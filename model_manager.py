@@ -20,8 +20,8 @@ class ModelManager:
         mp.set_start_method('spawn', force=True)
         
         # Initialize two models
-        if config.model_save_dir:
-            self.model_save_path = config.model_save_dir + f'loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_train.pth'
+        if config.save_path:
+            self.model_save_path = config.save_path + f'loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_train.pth'
         else:
             self.model_save_path = None
 
@@ -39,7 +39,7 @@ class ModelManager:
             self.train_model = CompleteModel(model_dim, num_layers=config.num_layers).to(device)
 
         self.query_encoder = query_encoder
-        self.loss_file = f'./final_results/loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_train.txt'
+        self.loss_file = f'./logs/loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_train.txt'
         
         
         # Ensure both models have same initial parameters
@@ -181,6 +181,7 @@ class ModelManager:
                 running_loss += loss.item()
 
             avg_loss = running_loss / (data_size / self.train_batch_size)
+            os.makedirs(os.path.dirname(self.loss_file), exist_ok=True)
             with open(self.loss_file, "a") as f:
                 f.write(f"[Epoch {ep+1}/{num_epochs}] avg_loss: {avg_loss:.4f}\n")
 
