@@ -21,12 +21,12 @@ class ModelManager:
         
         # Initialize two models
         if config.save_path:
-            self.model_save_path = config.save_path + f'loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_train.pth'
+            self.model_save_path = config.save_path + f'loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learning_rate}_{config.num_epochs_per_train}per_train.pth'
         else:
             self.model_save_path = None
 
         print(f"num_layers: {config.num_layers}")
-        print(f"learn_rate: {config.learn_rate}")
+        print(f"learning_rate: {config.learning_rate}")
         
         if self.model_save_path and os.path.exists(self.model_save_path):
             state_dict = torch.load(self.model_save_path)
@@ -39,7 +39,7 @@ class ModelManager:
             self.train_model = CompleteModel(model_dim, num_layers=config.num_layers).to(device)
 
         self.query_encoder = query_encoder
-        self.loss_file = f'./logs/loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learn_rate}_{config.num_epochs_per_train}per_train.txt'
+        self.loss_file = f'./logs/loss{config.delta_weight}_layer{config.num_layers}_learnrate{config.learning_rate}_{config.num_epochs_per_train}per_train.txt'
         
         
         # Ensure both models have same initial parameters
@@ -63,7 +63,7 @@ class ModelManager:
         # Add loss function
         self.criterion = CombinedLoss(delta_weight=config.delta_weight)
         # Add optimizer
-        self.optimizer = torch.optim.Adam(self.train_model.parameters(), lr=config.learn_rate)
+        self.optimizer = torch.optim.Adam(self.train_model.parameters(), lr=config.learning_rate)
 
     def start_training_process(self):
         """Start training process"""

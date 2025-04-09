@@ -38,7 +38,7 @@ Extensive experiments demonstrate that Dycard significantly reduces both Q-error
 - pg_ctl -D /home/user/pg_data start
 - psql dbname=postgres
 
-postgres=# create database user;
+postgres=# create database "user";
 postgres=# \q
 ```
 then you can use "psql" command in bash to connect to the database.
@@ -100,7 +100,7 @@ Embedders saved successfully
 Database embeddings initialized successfully
 Model dimension: 17
 num_layers: 10
-learn_rate: 0.0005
+learning_rate: 0.0005
 Server listening on port 7655...
 ```
 
@@ -121,7 +121,7 @@ Embedders loaded successfully
 Database embeddings initialized successfully
 Model dimension: 17
 num_layers: 10
-learn_rate: 0.0005
+learning_rate: 0.0005
 Infer model loaded from ./init_model/loss2_layer10_learnrate0.0005_1per_train.pth
 Server listening on port 7655...
 ```
