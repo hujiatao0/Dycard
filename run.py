@@ -82,7 +82,6 @@ class QueryExecutor:
         }
         
         def query_executor():
-            self.logger.info(f"SET static_mode = {self.parallel_mode}")
             try:
                 # Set basic parameters
                 if self.base_mode and not self.parallel_mode:
