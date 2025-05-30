@@ -2,7 +2,7 @@
 
 This project presents the integrated implementation of Dycard, our cardinality refinement system for the open-source database PostgreSQL. Dycard introduces a streaming training and inference framework that continuously improves cardinality estimates in real time by leveraging executed queries as experiential feedback. Instead of replacing the native cardinality estimator, Dycard refines it selectively, with a simple toggle to enable or disable correction, making it easily deployable in real-world production environments. We designed a new query encoding method that captures correlations among table columns within a dataset. This not only enhances correction accuracy but also provides a degree of interpretability for refined estimates.
 
-![Dycard Architecture](dycard_system.png)
+![Dycard Architecture](dycard_overview.png)
 
 Extensive experiments demonstrate that Dycard significantly reduces both Q-error and query latency, while generalizing well to unseen queries and adapting to dynamic workloads. Monitoring the system during steady-state operation confirms that Dycard is lightweight, adding negligible overhead to query processing even when correction is enabled.
 
