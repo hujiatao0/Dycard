@@ -1,0 +1,5 @@
+-- TPC-DS Test_Query Query 407
+-- Based on: query53.tpl (medium)
+-- Variation: 70
+
+ select  * from (select i_manufact_id, sum(ss_sales_price) sum_sales, avg(sum(ss_sales_price)) over (partition by i_manufact_id) avg_quarterly_sales from item, store_sales, date_dim, store where ss_item_sk = i_item_sk and ss_sold_date_sk = d_date_sk and ss_store_sk = s_store_sk and d_month_seq in (58,6+1,26+1,88+2,39+3,64+5,37+6,73+5,17+10,7+10,56+8,27+8) and ((i_category in ('Books','Children','Electronics') and i_class in ('personal','portable','reference','self-help') and i_brand in ('scholaramalgamalg #13','scholaramalgamalg #5', 'exportiunivamalg #11','scholaramalgamalg #8')) or(i_category in ('Women','Music','Men') and i_class in ('accessories','classical','fragrances','pants') and i_brand in ('amalgimporto #1','edu packscholar #1','exportiimporto #1', 'importoamalg #1'))) group by i_manufact_id, d_qoy ) tmp1 where case when avg_quarterly_sales > 2 then abs (sum_sales - avg_quarterly_sales)/ avg_quarterly_sales else null end > 0.1 order by avg_quarterly_sales, sum_sales, i_manufact_id limit 100;

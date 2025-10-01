@@ -2,11 +2,11 @@ import argparse
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Start the card server with optional schema save/load path')
-    parser.add_argument('--save_path', type=str, help='Path to save/load schema information', default='./init_model/')
+    parser.add_argument('--save_path', type=str, help='Path to save/load schema information', default='./new_model/')
     parser.add_argument('--batch_size', type=int, help='Batch size', default=32)
     parser.add_argument('--num_layers', type=int, help='Number of layers', default=10)
     parser.add_argument('--timeout', type=int, help='Timeout', default=300)
-    parser.add_argument('--dycard_port', type=int, help='Dycard port', default=7655)
+    parser.add_argument('--dycard_port', type=int, help='Dycard port', default=7656)
     parser.add_argument('--dbname', type=str, help='Database name', default='stats')
     parser.add_argument('--learning_rate', type=float, help='Learning rate', default=0.0005)
     parser.add_argument('--num_epochs_per_train', type=int, help='Number of epochs per train', default=1)
@@ -15,9 +15,9 @@ def parse_arguments():
     parser.add_argument('--delta_weight', type=float, help='Delta weight', default=2)
     parser.add_argument('--baseline', action='store_true', help='Run Baseline (PostgreSql Only)', default=False)
     parser.add_argument('--test_mode', action='store_true', help='Test mode', default=False)
-    parser.add_argument('--workload', type=str, help='Workload', default='stats_800.sql')
+    parser.add_argument('--workload', type=str, help='Workload (e.g., stats_train_1000.sql for file-based, tpcds_1000 for training, tpc-ds-test_800 for testing)', default='stats_800.sql')
     parser.add_argument('--pg_port', type=int, help='PostgreSql port', default=5432)
-    parser.add_argument('--pg_user', type=str, help='PostgreSql user', default='user')
+    parser.add_argument('--pg_user', type=str, help='PostgreSql user', default='hjt110')
 
     return parser.parse_args()
 

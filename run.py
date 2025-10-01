@@ -7,6 +7,7 @@ from datetime import datetime
 import re
 from config import config
 import os
+from tpcds_loader import TPCDSQueryLoader
 # Configure logging
 
 def calculate_q_error(est_card: float, true_card: float) -> float:
@@ -59,11 +60,32 @@ class QueryExecutor:
     
     def load_queries(self):
         """Load queries"""
-        queries = []
-        query_path = Path(f"workload/{config.workload}")
-        with open(query_path, 'r') as f:
-            queries = f.readlines()
-        return queries
+        # Check if this is TPC-DS workload (training or test)
+        if config.workload.startswith('tpcds') or config.workload.startswith('tpc-ds-test'):
+            if config.workload.startswith('tpc-ds-test'):
+                # Parse test workload parameters (e.g., 'tpc-ds-test_800' means 800 test queries)
+                parts = config.workload.split('_')
+                num_queries = int(parts[1]) if len(parts) > 1 else 800
+                loader = TPCDSQueryLoader('workload/tpc-ds-test')
+                workload_type = "test"
+            else:
+                # Parse training workload parameters (e.g., 'tpcds_1000' means 1000 training queries)
+                parts = config.workload.split('_')
+                num_queries = int(parts[1]) if len(parts) > 1 else 1000
+                loader = TPCDSQueryLoader('workload/tpcds')
+                workload_type = "training"
+
+            # Generate random distribution of queries
+            queries = loader.generate_query_sequence(num_queries, random_distribution=True)
+            self.logger.info(f"Loaded {len(queries)} TPC-DS {workload_type} queries with random distribution")
+            return queries
+        else:
+            # Original single-file loading logic
+            queries = []
+            query_path = Path(f"workload/{config.workload}")
+            with open(query_path, 'r') as f:
+                queries = f.readlines()
+            return queries
     
     def execute_query(self, cur, query, query_id, timeout_seconds=None):
         """Execute a single query and get execution time"""
@@ -94,6 +116,7 @@ class QueryExecutor:
                         cur.execute("SET static_mode = true;")
 
                 explain_query = f"EXPLAIN ANALYZE {query}"
+                print(explain_query)
                 cur.execute(explain_query)
                 results = cur.fetchall()
                 

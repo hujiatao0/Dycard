@@ -119,14 +119,17 @@ class ModelManager:
                     break
 
                 predicates_matrices, join_masks, seq_lens, est_rows, act_rows = zip(*batch_data)
-                max_seq_len = max(seq_len[0] for seq_len in seq_lens)  
-                        
+                max_seq_len = max(seq_len[0] for seq_len in seq_lens)
+
                 padding_masks = []
                 padded_predicates = []
                 padded_joins = []
-                
-                # Process each sample
+
+                # Process each sample - convert numpy arrays to tensors
                 for pred_mat, join_mat, seq_len in zip(predicates_matrices, join_masks, seq_lens):
+                    pred_mat = torch.from_numpy(pred_mat).float() if isinstance(pred_mat, np.ndarray) else pred_mat
+                    join_mat = torch.from_numpy(join_mat).float() if isinstance(join_mat, np.ndarray) else join_mat
+
                     curr_len = seq_len[0]
                     # Create padding mask: True for positions to mask (padding), False for valid positions
                     mask = torch.zeros((1, 1, curr_len), dtype=torch.bool)  # Changed to boolean type
@@ -154,8 +157,18 @@ class ModelManager:
                 predicates_batch = torch.cat(padded_predicates, dim=0)  # [batch_size, seq_len, feature_dim]
                 join_mask_batch = torch.cat(padded_joins, dim=0)  # [batch_size, seq_len, seq_len]
                 padding_mask_batch = torch.cat(padding_masks, dim=0)  # [batch_size, 1, seq_len]
-                est_rows_batch = torch.cat(est_rows, dim=0)
-                act_rows_batch = torch.cat(act_rows, dim=0)
+
+                # Convert numpy arrays to tensors if needed
+                est_rows_tensors = []
+                act_rows_tensors = []
+                for est, act in zip(est_rows, act_rows):
+                    est_tensor = torch.from_numpy(est).float() if isinstance(est, np.ndarray) else est
+                    act_tensor = torch.from_numpy(act).float() if isinstance(act, np.ndarray) else act
+                    est_rows_tensors.append(est_tensor)
+                    act_rows_tensors.append(act_tensor)
+
+                est_rows_batch = torch.cat(est_rows_tensors, dim=0)
+                act_rows_batch = torch.cat(act_rows_tensors, dim=0)
                 
                 predicates_batch = predicates_batch.to(device)
                 join_mask_batch = join_mask_batch.to(device)
@@ -239,11 +252,12 @@ class ModelManager:
         """Add training sample to queue"""
         tables, est_rows, act_rows = sample
         predicates_matrix, _, join_mask = self.query_encoder.encode_subquery(tables)
-        predicates_matrix = torch.from_numpy(predicates_matrix).float().unsqueeze(0)  # (16,17) -> (1,16,17)
-        join_mask = torch.from_numpy(join_mask).float().unsqueeze(0)  # (N,N) -> (1,N,N)
-        est_rows = torch.tensor([est_rows], dtype=torch.float32).unsqueeze(0)  
-        act_rows = torch.tensor([act_rows], dtype=torch.float32).unsqueeze(0)  
-        seq_len = [predicates_matrix.size(1)]
+        # Store as numpy arrays to avoid file descriptor leaks in multiprocessing
+        predicates_matrix = np.expand_dims(predicates_matrix, axis=0)  # (16,17) -> (1,16,17)
+        join_mask = np.expand_dims(join_mask, axis=0)  # (N,N) -> (1,N,N)
+        est_rows = np.array([[est_rows]], dtype=np.float32)
+        act_rows = np.array([[act_rows]], dtype=np.float32)
+        seq_len = [predicates_matrix.shape[1]]
         self.sample_queue.put((predicates_matrix, join_mask, seq_len, est_rows, act_rows))
 
     def cleanup(self):

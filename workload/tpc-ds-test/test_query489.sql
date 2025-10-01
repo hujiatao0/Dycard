@@ -1,0 +1,5 @@
+-- TPC-DS Test_Query Query 489
+-- Based on: query63.tpl (medium)
+-- Variation: 90
+
+ select  * from (select i_manager_id ,sum(ss_sales_price) sum_sales ,avg(sum(ss_sales_price)) over (partition by i_manager_id) avg_monthly_sales from item ,store_sales ,date_dim ,store where ss_item_sk = i_item_sk and ss_sold_date_sk = d_date_sk and ss_store_sk = s_store_sk and d_month_seq in (5,21+3,16+1,26+1,35+4,32+7,32+8,46+8,51+10,95+11,36+10,80+13) and ((    i_category in ('Books','Children','Electronics') and i_class in ('personal','portable','reference','self-help') and i_brand in ('scholaramalgamalg #11','scholaramalgamalg #6', 'exportiunivamalg #11','scholaramalgamalg #8')) or(    i_category in ('Women','Music','Men') and i_class in ('accessories','classical','fragrances','pants') and i_brand in ('amalgimporto #1','edu packscholar #3','exportiimporto #1', 'importoamalg #1'))) group by i_manager_id, d_moy) tmp1 where case when avg_monthly_sales > 1 then abs (sum_sales - avg_monthly_sales) / avg_monthly_sales else null end > 0.2 order by i_manager_id ,avg_monthly_sales ,sum_sales limit 97;

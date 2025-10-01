@@ -1,0 +1,5 @@
+-- TPC-DS Test_Query Query 374
+-- Based on: query48.tpl (medium)
+-- Variation: 40
+
+select sum (ss_quantity) from store_sales, store, customer_demographics, customer_address, date_dim where s_store_sk = ss_store_sk and  ss_sold_date_sk = d_date_sk and d_year = 1954 and ( ( cd_demo_sk = ss_cdemo_sk and cd_marital_status = 'MS.1' and cd_education_status = 'ES.3' and ss_sales_price between 100.1 and 150.1 ) or ( cd_demo_sk = ss_cdemo_sk and cd_marital_status = 'MS.4' and cd_education_status = 'ES.2' and ss_sales_price between 50.1 and 100.1 ) or ( cd_demo_sk = ss_cdemo_sk and cd_marital_status = 'MS.4' and cd_education_status = 'ES.1' and ss_sales_price between 150.1 and 200.1 ) ) and ( ( ss_addr_sk = ca_address_sk and ca_country = 'United States' and ca_state in ('STATE.3', 'STATE.2', 'STATE.5') and ss_net_profit between 2 and 2091 ) or (ss_addr_sk = ca_address_sk and ca_country = 'United States' and ca_state in ('STATE.3', 'STATE.6', 'STATE.5') and ss_net_profit between 155 and 2999 ) or (ss_addr_sk = ca_address_sk and ca_country = 'United States' and ca_state in ('STATE.8', 'STATE.7', 'STATE.10') and ss_net_profit between 53 and 25000 ) );
